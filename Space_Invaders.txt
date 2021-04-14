@@ -1,0 +1,467 @@
+package SpaceInvaders;
+
+import javax.swing.*;
+import java.awt.*;
+import java.awt.event.*;
+import java.util.*;
+
+abstract class GameObject { //슈퍼클래스
+	protected int posX;
+	protected int posY;
+	protected String image;
+
+	GameObject(String image, int posX, int posY) {
+		this.image = image;
+		this.posX = posX;
+		this.posY = posY;
+	}
+}
+
+class PlayerObject extends GameObject { //서브클래스
+	PlayerObject(String image, int posX, int posY) {
+		super(image, posX, posY);
+	}
+}
+
+class EnemyObject extends GameObject {
+	EnemyObject(String image, int posX, int posY) {
+		super(image, posX, posY);
+	}
+}
+
+class BulletObject extends GameObject {
+	BulletObject(String image, int posX, int posY) {
+		super(image, posX, posY);
+	}
+}
+
+class EnemyBulletObject extends GameObject {
+	EnemyBulletObject(String image, int posX, int posY) {
+		super(image, posX, posY);
+	}
+}
+
+public class SpaceInvaders extends JFrame implements KeyListener {
+	private GameHandler handler;
+	private JTextArea textArea = new JTextArea();
+
+	public SpaceInvaders() { //기본화면 설정
+		setTitle("Let's play Space Invader");
+		setSize(1700, 840);
+		setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+		setLocationRelativeTo(null); 
+		textArea.setFont(new Font("Courier New", Font.PLAIN, 30));
+		add(textArea); 
+		setVisible(true); 
+		textArea.setEditable(false); 
+		textArea.addKeyListener(this); 
+
+		handler = new GameHandler(textArea);
+		new Thread(new GameThread()).start();
+	}
+
+	public static void main(String[] args) { 
+		SpaceInvaders project = new SpaceInvaders();
+	}
+
+	class GameThread implements Runnable { //쓰레드가 계속 돌며 게임이 끝났는지 확인
+		@Override
+		public void run() {
+			while (!handler.isGameOver() && !handler.isGameWin()) { //졌거나 이기지 않았다면 계속 실행
+				moveKey();
+				handler.gameTiming();
+				handler.gameLogic();
+				handler.drawAll();
+			}
+			if (handler.isGameOver() == true) //끝나면 해당 함수로 이동
+				handler.drawGameOver();
+			if (handler.isGameWin() == true)
+				handler.drawGameWin();
+		}
+	}
+
+	public void moveKey() { //방향키 입력시 이동
+		if (handler.getRightKey() == true)
+			handler.moveRight();
+		if (handler.getLeftKey() == true)
+			handler.moveLeft();
+		if (handler.getUpKey() == true)
+			handler.moveUp();
+		if (handler.getDownKey() == true)
+			handler.moveDown();
+		if (handler.getSpaceKey() == true)
+			handler.moveSpace();
+	}
+
+	@Override
+	public void keyPressed(KeyEvent e) { //방향키 입력할 때만 값이 true
+		switch (e.getKeyCode()) {
+		case KeyEvent.VK_RIGHT:
+			handler.rightKey(true);
+			break;
+		case KeyEvent.VK_LEFT:
+			handler.leftKey(true);
+			break;
+		case KeyEvent.VK_UP:
+			handler.upKey(true);
+			break;
+		case KeyEvent.VK_DOWN:
+			handler.downKey(true);
+			break;
+		case KeyEvent.VK_SPACE:
+			handler.spaceKey(true);
+			break;
+		case KeyEvent.VK_Y:
+			SpaceInvaders project = new SpaceInvaders();
+			break;
+		case KeyEvent.VK_N:
+			System.exit(0);
+		}
+	}
+
+	@Override
+	public void keyReleased(KeyEvent e) { 방향키 입력을 멈추면 값이 false
+		switch (e.getKeyCode()) {
+		case KeyEvent.VK_RIGHT:
+			handler.rightKey(false);
+			break;
+		case KeyEvent.VK_LEFT:
+			handler.leftKey(false);
+			break;
+		case KeyEvent.VK_UP:
+			handler.upKey(false);
+			break;
+		case KeyEvent.VK_DOWN:
+			handler.downKey(false);
+			break;
+		case KeyEvent.VK_SPACE:
+			handler.spaceKey(false);
+		}
+	}
+
+	public void keyTyped(KeyEvent e) {
+	}
+
+	public class GameHandler { //필요한 상수,변수 설정
+		private final int SCREEN_WIDTH = 93, SCREEN_HEIGHT = 23;
+		private final int FIELD_WIDTH = 63, FIELD_HEIGHT = 23;
+		private final int LEFT_PADDING = 2;
+
+		private JTextArea textArea;
+		private char[][] buffer;
+		private int field[];
+
+		private int playCurX = 30;
+		private int playCurY = 21;
+
+		private boolean rightKey;
+		private boolean leftKey;
+		private boolean upKey;
+		private boolean downKey;
+		private boolean spaceKey;
+
+		private int score;
+
+		private boolean isGameOver;
+		private boolean isGameWin;
+
+		private int speed;
+		private int speedCounter;
+		private boolean forceUp;
+		private boolean forceDown;
+		private int count;
+		private int enemySpeedCounter = 24;
+
+		private int randomEnemyBullet; 
+
+		PlayerObject Player; //플레이어는 한명
+		ArrayList<GameObject> PlayerBullet; //총알, 적, 적총알은 배열로 설정
+		ArrayList<GameObject> Enemy;
+		ArrayList<GameObject> EnemyBullet;
+
+		public GameHandler(JTextArea ta) { //생성자에서 객체생성
+			textArea = ta;
+			field = new int[FIELD_WIDTH * FIELD_HEIGHT];
+			buffer = new char[SCREEN_WIDTH][SCREEN_HEIGHT];
+
+			Player = new PlayerObject(">-0-<", playCurX, playCurY);
+			PlayerBullet = new ArrayList<GameObject>();
+
+			Enemy = new ArrayList<GameObject>();
+			for (int i = 0; i < 8; i++) {
+				Enemy.add(i, new EnemyObject("[XUX]", 10 + i * 5, 2 * (i % 2) + 1));
+			}
+			EnemyBullet = new ArrayList<GameObject>();
+
+			initData();
+		}
+
+		public void rightKey(boolean key) {
+			rightKey = key;
+		}
+
+		public void leftKey(boolean key) {
+			leftKey = key;
+		}
+
+		public void upKey(boolean key) {
+			upKey = key;
+		}
+
+		public void downKey(boolean key) {
+			downKey = key;
+		}
+
+		public void spaceKey(boolean key) {
+			spaceKey = key;
+		}
+
+		public boolean getRightKey() {
+			return rightKey;
+		}
+
+		public boolean getLeftKey() {
+			return leftKey;
+		}
+
+		public boolean getUpKey() {
+			return upKey;
+		}
+
+		public boolean getDownKey() {
+			return downKey;
+		}
+
+		public boolean getSpaceKey() {
+			return spaceKey;
+		}
+
+		public void moveRight() { //플레이어 이동
+			if (Player.posX == 57)
+				Player.posX = Player.posX - 1;
+				Player.posX++;
+		}
+
+		public void moveLeft() { 
+			if (Player.posX == 1)
+				Player.posX = Player.posX + 1;
+				Player.posX--;
+		}
+
+		public void moveUp() { 
+			if (Player.posY == 0)
+				Player.posY = Player.posY + 1;
+				Player.posY--;
+		}
+
+		public void moveDown() {  
+			if (Player.posY == 22)
+				Player.posY = Player.posY - 1;
+				Player.posY++;
+		}
+
+		public void moveSpace() { //총알이동
+			if (spaceKey)
+				PlayerBullet.add(new BulletObject("!", Player.posX+2, Player.posY ));
+		}
+
+		public void gameTiming() { 
+			try {
+				Thread.sleep(50);
+			} catch (InterruptedException ex) {
+				ex.printStackTrace();
+			}
+			speedCounter++;
+			forceUp = (speedCounter >= speed);
+		}
+
+		public void gameLogic() {
+			if (forceUp == true) { //플레이어 총알
+				for (int i = 0; i < PlayerBullet.size(); i++) {
+					PlayerBullet.get(i).posY--;
+					if (PlayerBullet.get(i).posY == 0) {
+						PlayerBullet.remove(i);
+					}
+				}
+			}
+			if (forceDown == true) { //적비행기 총알
+				for (int i = 0; i < EnemyBullet.size(); i++) {
+					EnemyBullet.get(i).posY++;
+					if (EnemyBullet.get(i).posY == 23)
+						EnemyBullet.remove(i);
+				}
+			}
+
+			count++; 
+			if (count % enemySpeedCounter == 0) { //적 스피드가 아래로 이동 시 증가
+				moveEnemy();
+				EnemyMissile();
+			}
+			isGameWin();
+			isGameOver();
+			crashCheck();
+		}
+
+		public void moveEnemy() { //적비행기 이동
+			for (int i = 0; i < Enemy.size(); i++) { //우측으로 이동
+				if (Enemy.get(Enemy.size() - 1).posX < 57 && Enemy.get(0).posY % 2 == 1) {
+					Enemy.get(i).posX++;
+					continue;
+				}
+
+				if (Enemy.get(Enemy.size() - 1).posY % 2 == 1) { //한칸씩 내려오면 적 속도 증가
+					Enemy.get(i).posY++;
+					enemySpeedCounter--;
+					if (enemySpeedCounter < 0)
+						enemySpeedCounter = 2;
+					continue;
+				}
+
+				if (Enemy.get(0).posX > 1) { //좌측으로 이동
+					Enemy.get(i).posX--;
+					continue;
+				}
+
+				if (Enemy.get(Enemy.size() - 1).posY % 2 == 0) { //한칸씩 내려오다 최대속도가 되면 속도 고정
+					Enemy.get(i).posY++;
+					enemySpeedCounter--;
+					if (enemySpeedCounter < 0)
+						enemySpeedCounter = 2;
+					continue;
+				}
+			}
+
+		}
+
+		public void EnemyMissile() { //랜덤으로 적비행기에서 총알 생성
+			randomEnemyBullet = (int) (Math.random() * Enemy.size());
+			for (int i = 0; i < Enemy.size(); i++) {
+					EnemyBullet.add(new EnemyBulletObject("V", Enemy.get(randomEnemyBullet).posX + 2, Enemy.get(randomEnemyBullet).posY));
+			}
+		}
+
+		public boolean isGameWin() { //게임승리
+			if (Enemy.size() == 0) {
+				isGameWin = true;
+			}
+			return isGameWin;
+		}
+
+		public boolean isGameOver() { //적비행기 총알과 플레이어 충돌시 게임 패배
+			for (int i = 0; i < EnemyBullet.size(); i++) {
+				if (EnemyBullet.get(i).posX >= Player.posX && EnemyBullet.get(i).posX <= Player.posX + 4
+						&& EnemyBullet.get(i).posY == Player.posY) {
+					isGameOver = true;
+				}
+			}
+			return isGameOver;
+		}
+
+		public void crashCheck() { 플레이어 총알과 적비행기 총알 충돌시 점수획득
+			drawScore();
+			for (int i = 0; i < PlayerBullet.size(); i++) {
+				for (int j = 0; j < Enemy.size(); j++) {
+					if (PlayerBullet.get(i).posX >= Enemy.get(j).posX
+							&& PlayerBullet.get(i).posX <= Enemy.get(j).posX + 4
+							&& PlayerBullet.get(i).posY == Enemy.get(j).posY) {
+						Enemy.remove(j);
+						score = score + 10;
+					}
+				}
+			}
+		}
+
+		public void initData() {
+			for (int x = 0; x < FIELD_WIDTH; x++)
+				for (int y = 0; y < FIELD_HEIGHT; y++)
+					field[y * FIELD_WIDTH + x] = (x == 0 || x == FIELD_WIDTH - 1) ? 1 : 0;
+
+			isGameOver = false;
+			forceUp = false;
+			forceDown = true;
+			//drawScore();
+			clearBuffer();
+		}
+
+		private void clearBuffer() {
+			for (int y = 0; y < SCREEN_HEIGHT; y++) {
+				for (int x = 0; x < SCREEN_WIDTH; x++) {
+					buffer[x][y] = '.';
+				}
+			}
+		}
+
+		public void drawScore() {
+			drawToBuffer(66, 1, "┌────────────────────┐");
+			drawToBuffer(66, 2, "│                    │");
+			drawToBuffer(66, 3, "└────────────────────┘");
+			drawToBuffer(67, 2, " SCORE : " + score);
+			drawToBuffer(76, 21, "by D.Shin");
+		}
+
+		public void drawGameOver() {
+			drawToBuffer(19, 9,  "┌───────────────────────┐");
+			drawToBuffer(19, 10, "│       GAME OVER       │");
+			drawToBuffer(19, 11, "│                       │");
+			drawToBuffer(19, 12, "│    PLAY AGAIN? (Y/N)  │");
+			drawToBuffer(19, 13, "└───────────────────────┘");
+			render();
+		}
+
+		public void drawGameWin() {
+			drawToBuffer(19, 9,  "┌───────────────────────┐");
+			drawToBuffer(19, 10, "│        YOU WIN!       │");
+			drawToBuffer(19, 11, "│                       │");
+			drawToBuffer(19, 12, "│    PLAY AGAIN? (Y/N)  │");
+			drawToBuffer(19, 13, "└───────────────────────┘");
+			render();
+		}
+
+		public void drawAll() {
+			for (int x = 0; x < FIELD_WIDTH; x++) {
+				for (int y = 0; y < FIELD_HEIGHT; y++) {
+					drawToBuffer(x, y, " #".charAt(field[FIELD_WIDTH + x]));
+				}
+			}
+			drawToObject();
+			render();
+		}
+
+		public void drawToObject() { //객체를 화면에 보여주는 함수
+			drawToBuffer(Player.posX, Player.posY, Player.image);
+
+			for (int i = 0; i < PlayerBullet.size(); i++) {
+				drawToBuffer(PlayerBullet.get(i).posX, PlayerBullet.get(i).posY, PlayerBullet.get(i).image);
+			}
+
+			for (int i = 0; i < Enemy.size(); i++) {
+				drawToBuffer(Enemy.get(i).posX, Enemy.get(i).posY, Enemy.get(i).image);
+			}
+
+			for (int i = 0; i < EnemyBullet.size(); i++) {
+				drawToBuffer(EnemyBullet.get(i).posX, EnemyBullet.get(i).posY, EnemyBullet.get(i).image);
+			}
+		}
+
+		public void drawToBuffer(int px, int py, String c) {
+			for (int x = 0; x < c.length(); x++) {
+				buffer[px + x + LEFT_PADDING][py] = c.charAt(x);
+			}
+		}
+
+		public void drawToBuffer(int px, int py, char c) {
+			buffer[px + LEFT_PADDING][py] = c;
+		}
+
+		private void render() {
+			StringBuilder sb = new StringBuilder();
+			for (int y = 0; y < SCREEN_HEIGHT; y++) {
+				for (int x = 0; x < SCREEN_WIDTH; x++) {
+					sb.append(buffer[x][y]);
+				}
+				sb.append("\n");
+			}
+			textArea.setText(sb.toString());
+		}
+	}
+}
